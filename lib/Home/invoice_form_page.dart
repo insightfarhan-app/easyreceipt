@@ -1038,6 +1038,7 @@ class _InvoiceFormPageState extends State<InvoiceFormPage>
     );
   }
 
+  //summary card
   Widget _buildSummaryCard() {
     return Container(
       decoration: BoxDecoration(
