@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class CompareReportPage extends StatefulWidget {
   const CompareReportPage({super.key});
@@ -9,376 +11,614 @@ class CompareReportPage extends StatefulWidget {
   State<CompareReportPage> createState() => _CompareReportPageState();
 }
 
-class _CompareReportPageState extends State<CompareReportPage>
-    with SingleTickerProviderStateMixin {
+class _CompareReportPageState extends State<CompareReportPage> {
+  // Data
   List<Map<String, dynamic>> invoices = [];
+  bool loading = true;
 
+  // Selection
   DateTimeRange? periodA;
   DateTimeRange? periodB;
 
-  Map<String, dynamic>? resultA;
-  Map<String, dynamic>? resultB;
+  // Calculated Results
+  Map<String, dynamic>? statsA;
+  Map<String, dynamic>? statsB;
 
   @override
   void initState() {
     super.initState();
-    _loadInvoices();
+    _loadData();
   }
 
-  Future<void> _loadInvoices() async {
+  Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList("invoice_history") ?? [];
-
+    final list = prefs.getStringList("invoice_history") ?? [];
     final parsed = <Map<String, dynamic>>[];
-    for (final s in raw) {
+
+    for (final s in list) {
       try {
         final d = jsonDecode(s);
-        if (d is Map<String, dynamic>) parsed.add(d);
+        if (d is Map<String, dynamic>) {
+          // Normalize data
+          d['savedAt'] ??= d['invoiceDate'] ?? DateTime.now().toIso8601String();
+          d['grandTotal'] = (d['grandTotal'] is num) ? d['grandTotal'] : 0.0;
+          d['status'] ??= 'Unpaid';
+          parsed.add(d);
+        }
       } catch (_) {}
     }
 
-    setState(() => invoices = parsed);
+    setState(() {
+      invoices = parsed;
+      loading = false;
+    });
   }
 
-  Future<void> pickA() async {
-    final now = DateTime.now();
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(now.year - 5),
-      lastDate: DateTime(now.year + 5),
-      helpText: "Select Period A",
-      builder: _pickerStyle,
-    );
-    if (picked != null) {
-      setState(() => periodA = picked);
-      _calculate();
-    }
-  }
+  // --- LOGIC ---
 
-  Future<void> pickB() async {
-    final now = DateTime.now();
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(now.year - 5),
-      lastDate: DateTime(now.year + 5),
-      helpText: "Select Period B",
-      builder: _pickerStyle,
-    );
-    if (picked != null) {
-      setState(() => periodB = picked);
-      _calculate();
-    }
-  }
-
-  Widget _pickerStyle(context, child) {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        colorScheme: ColorScheme.light(
-          primary: Color(0xFF1E88E5),
-          onPrimary: Colors.white,
-          onSurface: Colors.black87,
-        ),
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(foregroundColor: Color(0xFF1E88E5)),
-        ),
-      ),
-      child: child!,
-    );
-  }
-
-  void _calculate() {
-    if (periodA != null) resultA = _calc(periodA!);
-    if (periodB != null) resultB = _calc(periodB!);
-    setState(() {});
-  }
-
-  Map<String, dynamic> _calc(DateTimeRange range) {
-    final list = invoices.where((inv) {
-      final date =
-          DateTime.tryParse(inv["savedAt"] ?? inv["invoiceDate"]) ??
-          DateTime.now();
+  Map<String, dynamic> _calculateStats(DateTimeRange range) {
+    final filtered = invoices.where((inv) {
+      final date = DateTime.tryParse(inv['savedAt']) ?? DateTime.now();
       return !date.isBefore(range.start) && !date.isAfter(range.end);
     }).toList();
 
     double total = 0;
-    int count = list.length;
-    int paid = 0, unpaid = 0;
+    int paid = 0;
+    int unpaid = 0;
 
-    for (final i in list) {
-      total += (i["grandTotal"] is num) ? i["grandTotal"] : 0.0;
-      if (i["status"] == "Paid") {
+    for (final i in filtered) {
+      total += i['grandTotal'];
+      if (i['status'].toString().toLowerCase() == 'paid') {
         paid++;
       } else {
         unpaid++;
       }
     }
 
-    return {"count": count, "total": total, "paid": paid, "unpaid": unpaid};
+    return {
+      "count": filtered.length,
+      "total": total,
+      "paid": paid,
+      "unpaid": unpaid,
+    };
   }
 
-  String formatRange(DateTimeRange? r) {
-    if (r == null) return "-";
-    return "${r.start.day}/${r.start.month}/${r.start.year} → ${r.end.day}/${r.end.month}/${r.end.year}";
+  void _updateStats() {
+    setState(() {
+      if (periodA != null) statsA = _calculateStats(periodA!);
+      if (periodB != null) statsB = _calculateStats(periodB!);
+    });
   }
 
-  Widget _summaryBox(String title, Map<String, dynamic>? data, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withOpacity(0.5), width: 1.2),
-        boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 3)),
-        ],
+  // --- DATE SELECTION (The "Premium" Way) ---
+
+  void _showPeriodSelector(bool isPeriodA) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isPeriodA
+                  ? "Select Period A (Baseline)"
+                  : "Select Period B (Comparison)",
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 20),
+            _presetButton("Last 7 Days", 7, isPeriodA),
+            _presetButton("Last 30 Days", 30, isPeriodA),
+            _presetButton("This Month", 0, isPeriodA, mode: 'month'),
+            _presetButton("Previous Month", 0, isPeriodA, mode: 'prev_month'),
+            const Divider(color: Colors.white24, height: 30),
+            ListTile(
+              leading: const Icon(
+                Icons.calendar_today,
+                color: Color(0xFF1E88E5),
+              ),
+              title: const Text(
+                "Custom Range",
+                style: TextStyle(color: Colors.white),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickCustomDate(isPeriodA);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _presetButton(String text, int days, bool isPeriodA, {String? mode}) {
+    return ListTile(
+      title: Text(text, style: const TextStyle(color: Colors.white70)),
+      onTap: () {
+        DateTime now = DateTime.now();
+        DateTime start, end;
+
+        if (mode == 'month') {
+          start = DateTime(now.year, now.month, 1);
+          end = now;
+        } else if (mode == 'prev_month') {
+          start = DateTime(now.year, now.month - 1, 1);
+          end = DateTime(now.year, now.month, 0); // Last day of prev month
+        } else {
+          end = now;
+          start = now.subtract(Duration(days: days));
+        }
+
+        setState(() {
+          if (isPeriodA) {
+            periodA = DateTimeRange(start: start, end: end);
+          } else {
+            periodB = DateTimeRange(start: start, end: end);
+          }
+          _updateStats();
+        });
+        Navigator.pop(context);
+      },
+    );
+  }
+
+  Future<void> _pickCustomDate(bool isPeriodA) async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      initialDateRange: isPeriodA ? periodA : periodB,
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF1E88E5),
+              onPrimary: Colors.white,
+              surface: Color(0xFF1E1E1E),
+              onSurface: Colors.white,
             ),
           ),
-          const SizedBox(height: 14),
-          if (data == null)
-            Text(
-              "No data selected",
-              style: TextStyle(color: Colors.grey[700], fontSize: 13),
-            )
-          else ...[
-            _dataLine("Invoices", data["count"].toString()),
-            _dataLine("Total Amount", data["total"].toString()),
-            _dataLine("Paid", data["paid"].toString()),
-            _dataLine("Unpaid", data["unpaid"].toString()),
-          ],
-        ],
-      ),
+          child: child!,
+        );
+      },
     );
+
+    if (picked != null) {
+      setState(() {
+        if (isPeriodA) {
+          periodA = picked;
+        } else {
+          periodB = picked;
+        }
+        _updateStats();
+      });
+    }
   }
 
-  Widget _dataLine(String title, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 13, color: Colors.black87),
-          ),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
+  String _fmtDate(DateTime d) => "${d.day}/${d.month}";
 
-  Widget _comparisonCard(String label, num a, num b) {
-    final diff = b - a;
-    final isIncrease = diff > 0;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 12),
-
-          /// Progress bars
-          Row(
-            children: [
-              Expanded(
-                child: AnimatedContainer(
-                  duration: Duration(milliseconds: 600),
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: Color(0xFF1E88E5),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  width: a.toDouble(),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text("$a"),
-            ],
-          ),
-          const SizedBox(height: 6),
-
-          Row(
-            children: [
-              Expanded(
-                child: AnimatedContainer(
-                  duration: Duration(milliseconds: 600),
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: Color(0xFFEF5350),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  width: b.toDouble(),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text("$b"),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          /// Increase or decrease indicator
-          Row(
-            children: [
-              Icon(
-                isIncrease ? Icons.arrow_upward : Icons.arrow_downward,
-                color: isIncrease ? Colors.green : Colors.red,
-                size: 20,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                isIncrease
-                    ? "Increased by ${diff.abs()}"
-                    : "Decreased by ${diff.abs()}",
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isIncrease ? Colors.green : Colors.red,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  // --- UI BUILDING BLOCKS ---
 
   @override
   Widget build(BuildContext context) {
-    const Blue = Color(0xFF1E88E5);
-    const Red = Color(0xFFEF5350);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWideScreen = screenWidth > 600;
 
     return Scaffold(
-      backgroundColor: Color(0xFFF6F7F9),
+      extendBodyBehindAppBar: true,
+      backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        backgroundColor: Blue,
-        title: const Text(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
           "Compare Reports",
-          style: TextStyle(color: Colors.white),
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Select Two Time Periods",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      body: Stack(
+        children: [
+          // Ambient Background Gradient
+          Positioned(
+            top: -100,
+            right: -100,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+              child: Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF1E88E5).withOpacity(0.2),
+                ),
+              ),
             ),
+          ),
 
-            const SizedBox(height: 18),
-
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: pickA,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Blue,
-                      padding: EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isWideScreen ? 1200 : double.infinity,
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. SELECTORS
+                      Row(
+                        children: [
+                          Expanded(child: _buildSelectorCard(true)),
+                          const SizedBox(width: 12),
+                          Expanded(child: _buildSelectorCard(false)),
+                        ],
                       ),
-                    ),
-                    child: const Text(
-                      "Pick Period A",
-                      style: TextStyle(color: Colors.white),
-                    ),
+
+                      const SizedBox(height: 30),
+
+                      // 2. COMPARISON CONTENT
+                      if (statsA != null && statsB != null) ...[
+                        Text(
+                          "Performance Analysis",
+                          style: GoogleFonts.inter(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildTotalSalesCard(),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildMiniStatCard(
+                                "Invoices",
+                                "count",
+                                false,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildMiniStatCard(
+                                "Paid Count",
+                                "paid",
+                                false,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _buildMiniStatCard(
+                          "Unpaid Invoices",
+                          "unpaid",
+                          true,
+                        ), // Inverse Logic
+                      ] else ...[
+                        // Empty State
+                        Container(
+                          height: 300,
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.bar_chart_rounded,
+                                size: 64,
+                                color: Colors.white.withOpacity(0.1),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                "Select two periods to begin comparison",
+                                style: GoogleFonts.inter(color: Colors.white38),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: pickB,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Red,
-                      padding: EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: const Text(
-                      "Pick Period B",
-                      style: TextStyle(color: Colors.white),
-                    ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectorCard(bool isA) {
+    final range = isA ? periodA : periodB;
+    final color = isA ? const Color(0xFF1E88E5) : const Color(0xFFE91E63);
+    final label = isA ? "Period A" : "Period B";
+
+    return GestureDetector(
+      onTap: () => _showPeriodSelector(isA),
+      child: Container(
+        height: 110,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: range != null ? color.withOpacity(0.5) : Colors.white10,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
                   ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: GoogleFonts.inter(color: Colors.white70, fontSize: 12),
                 ),
               ],
             ),
-
-            const SizedBox(height: 22),
-
-            Text(
-              "Period A: ${formatRange(periodA)}",
-              style: const TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            _summaryBox("Period A Summary", resultA, Blue),
-
-            const SizedBox(height: 30),
-
-            Text(
-              "Period B: ${formatRange(periodB)}",
-              style: const TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            _summaryBox("Period B Summary", resultB, Red),
-
-            const SizedBox(height: 30),
-
-            if (resultA != null && resultB != null) ...[
-              const Text(
-                "Comparison",
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            if (range != null)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "${_fmtDate(range.start)} - ${_fmtDate(range.end)}",
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  Text(
+                    "${range.duration.inDays + 1} Days",
+                    style: GoogleFonts.inter(
+                      color: Colors.white38,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              )
+            else
+              Text(
+                "Tap to select",
+                style: GoogleFonts.inter(color: Colors.white30, fontSize: 14),
               ),
-              const SizedBox(height: 18),
-
-              _comparisonCard(
-                "Total Amount",
-                resultA!["total"],
-                resultB!["total"],
-              ),
-              _comparisonCard(
-                "Invoice Count",
-                resultA!["count"],
-                resultB!["count"],
-              ),
-              _comparisonCard("Paid", resultA!["paid"], resultB!["paid"]),
-              _comparisonCard("Unpaid", resultA!["unpaid"], resultB!["unpaid"]),
-            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTotalSalesCard() {
+    final valA = statsA!['total'] as double;
+    final valB = statsB!['total'] as double;
+    final diff = valB - valA;
+    final pct = valA == 0 ? 100.0 : ((diff / valA) * 100);
+    final isPositive = diff >= 0;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.1),
+            Colors.white.withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Total Revenue",
+            style: GoogleFonts.inter(color: Colors.white70),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                valB.toStringAsFixed(2),
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: isPositive
+                      ? Colors.green.withOpacity(0.2)
+                      : Colors.red.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isPositive ? Icons.trending_up : Icons.trending_down,
+                      color: isPositive ? Colors.green : Colors.red,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      "${pct.abs().toStringAsFixed(1)}%",
+                      style: GoogleFonts.inter(
+                        color: isPositive ? Colors.green : Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Comparison Bars
+          _buildBar("Period A", valA, const Color(0xFF1E88E5), valA, valB),
+          const SizedBox(height: 10),
+          _buildBar("Period B", valB, const Color(0xFFE91E63), valA, valB),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBar(
+    String label,
+    double val,
+    Color color,
+    double valA,
+    double valB,
+  ) {
+    double maxVal = valA > valB ? valA : valB;
+    if (maxVal == 0) maxVal = 1;
+    final widthFactor = (val / maxVal).clamp(0.0, 1.0);
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 70,
+          child: Text(
+            label,
+            style: GoogleFonts.inter(color: Colors.white54, fontSize: 12),
+          ),
+        ),
+        Expanded(
+          child: Stack(
+            children: [
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Colors.white10,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              FractionallySizedBox(
+                widthFactor: widthFactor,
+                child: Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withOpacity(0.4),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          val.toStringAsFixed(0),
+          style: GoogleFonts.inter(color: Colors.white, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMiniStatCard(String title, String key, bool inverseColors) {
+    final valA = statsA![key] as int;
+    final valB = statsB![key] as int;
+    final diff = valB - valA;
+
+    // For 'Unpaid', an increase is BAD (Red), decrease is GOOD (Green)
+    // For others, increase is GOOD (Green)
+    bool isGood = inverseColors ? diff <= 0 : diff >= 0;
+    Color indicatorColor = isGood ? Colors.green : Colors.red;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(color: Colors.white54, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "$valB",
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (diff != 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: indicatorColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    "${diff > 0 ? '+' : ''}$diff",
+                    style: GoogleFonts.inter(
+                      color: indicatorColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "vs $valA prev",
+            style: GoogleFonts.inter(color: Colors.white30, fontSize: 11),
+          ),
+        ],
       ),
     );
   }

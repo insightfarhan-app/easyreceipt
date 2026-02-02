@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:EasyInvoice/Provider/theme_provider.dart';
 
 class TermsPage extends StatelessWidget {
   const TermsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: colors.background,
       appBar: AppBar(
         backgroundColor: const Color(0xFF1565C0),
         elevation: 0,
@@ -29,6 +31,7 @@ class TermsPage extends StatelessWidget {
             _text(
               "These Terms & Conditions outline the rules and guidelines for using the EasyInvoice mobile application. "
               "By installing or using this app, you automatically agree to these terms.",
+              color: colors.textPrimary,
             ),
 
             const SizedBox(height: 25),
@@ -37,6 +40,7 @@ class TermsPage extends StatelessWidget {
             _text(
               "By accessing or using EasyInvoice, you agree to abide by these Terms & Conditions. "
               "If you do not agree, please discontinue using the app immediately.",
+              color: colors.textPrimary,
             ),
 
             const SizedBox(height: 25),
@@ -45,6 +49,7 @@ class TermsPage extends StatelessWidget {
             _text(
               "EasyInvoice works entirely offline. All data you create (invoices, items, client details, templates) "
               "is stored locally on your device. We do not collect, upload, store, or process any user data on external servers.",
+              color: colors.textPrimary,
             ),
 
             const SizedBox(height: 25),
@@ -53,6 +58,7 @@ class TermsPage extends StatelessWidget {
             _text(
               "You are responsible for maintaining the security of your device and any invoices or business data you store. "
               "EasyInvoice is not responsible for any data loss caused by:",
+              color: colors.textPrimary,
             ),
             _bullets([
               "Uninstalling the app",
@@ -60,7 +66,7 @@ class TermsPage extends StatelessWidget {
               "Factory reset",
               "Device damage or malfunction",
               "User mistake or accidental deletion",
-            ]),
+            ], color: colors.textPrimary),
 
             const SizedBox(height: 25),
 
@@ -68,18 +74,19 @@ class TermsPage extends StatelessWidget {
             _text(
               "While EasyInvoice helps generate professional invoices, the accuracy of business information, pricing, "
               "tax calculations, and client details entered into the app is solely your responsibility.",
+              color: colors.textPrimary,
             ),
 
             const SizedBox(height: 25),
 
             _sectionTitle("5. Prohibited Actions"),
-            _text("You agree NOT to:"),
+            _text("You agree NOT to:", color: colors.textPrimary),
             _bullets([
               "Modify, hack, or reverse-engineer the app",
               "Use the app for illegal or fraudulent activities",
               "Distribute invoices containing false or misleading information",
               "Sell, rent, or resell the app's code or UI",
-            ]),
+            ], color: colors.textPrimary),
 
             const SizedBox(height: 25),
 
@@ -87,6 +94,7 @@ class TermsPage extends StatelessWidget {
             _text(
               "All design elements, icons, UI components, features, and branding in EasyInvoice are the intellectual property "
               "of the app creator. You may use the app but cannot duplicate or resell the design or code.",
+              color: colors.textPrimary,
             ),
 
             const SizedBox(height: 25),
@@ -95,6 +103,7 @@ class TermsPage extends StatelessWidget {
             _text(
               "EasyInvoice is provided \"as-is\" without warranties of any kind. "
               "We do not guarantee error-free performance, though we strive to improve continuously.",
+              color: colors.textPrimary,
             ),
 
             const SizedBox(height: 25),
@@ -102,6 +111,7 @@ class TermsPage extends StatelessWidget {
             _sectionTitle("8. Limitation of Liability"),
             _text(
               "To the maximum extent permitted by law, EasyInvoice is not liable for any:",
+              color: colors.textPrimary,
             ),
             _bullets([
               "Loss of business data",
@@ -109,7 +119,7 @@ class TermsPage extends StatelessWidget {
               "Loss of revenue",
               "App misuse",
               "Unexpected bugs or crashes",
-            ]),
+            ], color: colors.textPrimary),
 
             const SizedBox(height: 25),
 
@@ -117,6 +127,7 @@ class TermsPage extends StatelessWidget {
             _text(
               "We may update these terms at any time to improve security, UX, or comply with regulations. "
               "Continued use after updates means you accept the revised terms.",
+              color: colors.textPrimary,
             ),
 
             const SizedBox(height: 25),
@@ -124,8 +135,12 @@ class TermsPage extends StatelessWidget {
             _sectionTitle("10. Contact Information"),
             _text(
               "If you have questions about these Terms & Conditions, you may contact us at:",
+              color: colors.textPrimary,
             ),
-            _textBold("📧 support.farhanappdev@gmail.com"),
+            _textBold(
+              "📧 support.farhanappdev@gmail.com",
+              color: colors.textPrimary,
+            ),
 
             const SizedBox(height: 40),
           ],
@@ -156,7 +171,7 @@ class TermsPage extends StatelessWidget {
     );
   }
 
-  Widget _text(String text) {
+  Widget _text(String text, {Color? color}) {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Text(
@@ -164,13 +179,13 @@ class TermsPage extends StatelessWidget {
         style: GoogleFonts.inter(
           fontSize: 15,
           height: 1.5,
-          color: Colors.black87,
+          color: color ?? Colors.black87,
         ),
       ),
     );
   }
 
-  Widget _textBold(String text) {
+  Widget _textBold(String text, {Color? color}) {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Text(
@@ -178,13 +193,13 @@ class TermsPage extends StatelessWidget {
         style: GoogleFonts.inter(
           fontSize: 16,
           fontWeight: FontWeight.w600,
-          color: Colors.black87,
+          color: color ?? Colors.black87,
         ),
       ),
     );
   }
 
-  Widget _bullets(List<String> items) {
+  Widget _bullets(List<String> items, {Color? color}) {
     return Column(
       children: items
           .map(
@@ -193,11 +208,15 @@ class TermsPage extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("•  ", style: TextStyle(fontSize: 20)),
+                  Text("•  ", style: TextStyle(fontSize: 20, color: color)),
                   Expanded(
                     child: Text(
                       e,
-                      style: GoogleFonts.inter(fontSize: 15, height: 1.5),
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        height: 1.5,
+                        color: color,
+                      ),
                     ),
                   ),
                 ],

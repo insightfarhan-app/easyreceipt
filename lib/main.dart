@@ -1,8 +1,26 @@
-import 'Home/homepage.dart';
+import 'package:EasyInvoice/Drawer/Security/security_service.dart';
+import 'package:EasyInvoice/Provider/theme_provider.dart';
+import 'package:EasyInvoice/splash_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
-void main() => runApp(EasyReceiptApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  bool authorized = await SecurityService.requireAppLock();
+
+  if (authorized) {
+    runApp(
+      ChangeNotifierProvider(
+        create: (_) => ThemeProvider(),
+        child: const EasyReceiptApp(),
+      ),
+    );
+  } else {
+    SystemNavigator.pop();
+  }
+}
 
 class EasyReceiptApp extends StatelessWidget {
   static const Color primary = Color(0xFF1E88E5);
@@ -15,53 +33,26 @@ class EasyReceiptApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'EasyReceipt',
-      theme: ThemeData(
-        scaffoldBackgroundColor: background,
-        primaryColor: primary,
-        colorScheme: ColorScheme.fromSwatch().copyWith(
-          primary: primary,
-          secondary: accent,
-        ),
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.white,
-          elevation: 1,
-          iconTheme: IconThemeData(color: primaryDark),
-          titleTextStyle: GoogleFonts.inter(
-            color: textColor,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return AnimatedTheme(
+          data: themeProvider.isDarkMode
+              ? ThemeProvider.darkTheme
+              : ThemeProvider.lightTheme,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'EasyReceipt',
+            theme: ThemeProvider.lightTheme,
+            darkTheme: ThemeProvider.darkTheme,
+            themeMode: themeProvider.isDarkMode
+                ? ThemeMode.dark
+                : ThemeMode.light,
+            home: const SplashScreen(),
           ),
-        ),
-        textTheme: TextTheme(
-          titleLarge: GoogleFonts.inter(
-            color: textColor,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-          bodyLarge: GoogleFonts.inter(color: textColor, fontSize: 14),
-          bodyMedium: GoogleFonts.inter(
-            color: textColor.withAlpha((0.8 * 255).round()),
-            fontSize: 13,
-          ),
-        ),
-
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primary,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            padding: EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-          ),
-        ),
-        floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: accent,
-        ),
-      ),
-      home: HomePage(),
+        );
+      },
     );
   }
 }
