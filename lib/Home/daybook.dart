@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:EasyInvoice/Provider/theme_provider.dart';
+import 'package:EasyInvoice/Services/purchase_history.dart';
 
 enum DayBookFilter { today, weekly, monthly, all }
 
@@ -61,8 +62,8 @@ class _DayBookPageState extends State<DayBookPage>
     // Load Currency
     _currencySymbol = prefs.getString('currency_symbol') ?? '\$';
 
-    // Load History
-    final list = prefs.getStringList("invoice_history") ?? [];
+    // Load History using PurchaseHistoryService
+    final rawList = await PurchaseHistoryService.getRawHistory();
     List<Map<String, dynamic>> filteredList = [];
 
     double rev = 0;
@@ -78,7 +79,7 @@ class _DayBookPageState extends State<DayBookPage>
     );
     DateTime startOfMonth = DateTime(now.year, now.month, 1);
 
-    for (var s in list) {
+    for (var s in rawList) {
       try {
         final inv = jsonDecode(s);
 

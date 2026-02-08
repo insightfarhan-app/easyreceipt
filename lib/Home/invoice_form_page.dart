@@ -1,6 +1,7 @@
 import 'package:EasyInvoice/Home/invoice_template_page.dart';
 import 'package:EasyInvoice/Home/template_preview.dart';
 import 'package:EasyInvoice/Provider/theme_provider.dart';
+import 'package:EasyInvoice/Services/purchase_history.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -175,30 +176,12 @@ class _InvoiceFormPageState extends State<InvoiceFormPage>
   }
 
   Future<void> _saveInvoiceToHistory(Map<String, dynamic> invoiceData) async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList("invoice_history") ?? [];
-    int existingIndex = -1;
-
-    for (int i = 0; i < list.length; i++) {
-      try {
-        final existing = jsonDecode(list[i]);
-        if (existing['invoiceId'] == invoiceData['invoiceId']) {
-          existingIndex = i;
-          break;
-        }
-      } catch (e) {
-        continue;
-      }
+    // Use PurchaseHistoryService to save invoice
+    bool success = await PurchaseHistoryService.addOrUpdatePurchase(invoiceData);
+    
+    if (success) {
+      await _saveTaxValue();
     }
-
-    invoiceData["savedAt"] = DateTime.now().toIso8601String();
-    if (existingIndex != -1) {
-      list[existingIndex] = jsonEncode(invoiceData);
-    } else {
-      list.add(jsonEncode(invoiceData));
-    }
-    await prefs.setStringList("invoice_history", list);
-    await _saveTaxValue();
   }
 
   Future<void> _checkTemplateDialog() async {
