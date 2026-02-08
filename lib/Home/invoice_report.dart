@@ -73,7 +73,7 @@ class _InvoiceReportState extends State<InvoiceReport>
     setState(() => _loading = true);
     final list = await PurchaseHistoryService.getRawHistory();
 
-    final parsed = <Map<String, dynamic>>();
+    final parsed = <Map<String, dynamic>>[];
 
     for (final s in list) {
       try {

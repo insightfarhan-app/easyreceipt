@@ -57,14 +57,17 @@ class PurchaseHistoryService {
         }
       }
 
+      // Create a copy to avoid modifying the original
+      final dataCopy = Map<String, dynamic>.from(invoiceData);
+      
       // Add timestamp
-      invoiceData["savedAt"] = DateTime.now().toIso8601String();
+      dataCopy["savedAt"] = DateTime.now().toIso8601String();
 
       // Update existing or add new
       if (existingIndex != -1) {
-        list[existingIndex] = jsonEncode(invoiceData);
+        list[existingIndex] = jsonEncode(dataCopy);
       } else {
-        list.add(jsonEncode(invoiceData));
+        list.add(jsonEncode(dataCopy));
       }
 
       await prefs.setStringList(_historyKey, list);
