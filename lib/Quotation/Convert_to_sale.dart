@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:EasyInvoice/Home/template_preview.dart';
 import 'package:EasyInvoice/Quotation/quotation_preview.dart';
 import 'package:EasyInvoice/Provider/theme_provider.dart';
+import 'package:EasyInvoice/Services/purchase_history.dart';
 
 class ConvertToInvoicePage extends StatefulWidget {
   const ConvertToInvoicePage({super.key});
@@ -128,7 +129,9 @@ class _ConvertToInvoicePageState extends State<ConvertToInvoicePage>
   Future<void> _convertQuoteToInvoice(Map<String, dynamic> quoteData) async {
     final colors = AppColors(context);
     final prefs = await SharedPreferences.getInstance();
-    List<String> history = prefs.getStringList("invoice_history") ?? [];
+    
+    // Use PurchaseHistoryService to get history
+    List<String> history = await PurchaseHistoryService.getRawHistory();
 
     // Check if this quotation has already been converted
     String currentQuoteId = quoteData['quoteId']?.toString() ?? '';
@@ -247,9 +250,8 @@ class _ConvertToInvoicePageState extends State<ConvertToInvoicePage>
       'savedAt': DateTime.now().toIso8601String(),
     };
 
-    // C. SAVE TO INVOICE HISTORY
-    history.add(jsonEncode(newInvoice));
-    await prefs.setStringList("invoice_history", history);
+    // C. SAVE TO INVOICE HISTORY using PurchaseHistoryService
+    await PurchaseHistoryService.addOrUpdatePurchase(newInvoice);
 
     // D. CLOSE LOADING & NAVIGATE DIRECTLY TO PREVIEW
     if (mounted) {

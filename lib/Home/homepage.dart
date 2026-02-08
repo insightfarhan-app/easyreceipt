@@ -11,6 +11,7 @@ import 'package:EasyInvoice/Home/invoice_report.dart';
 import 'package:EasyInvoice/Home/invoice_template_page.dart';
 import 'package:EasyInvoice/Home/sales_graph.dart';
 import 'package:EasyInvoice/Provider/theme_provider.dart';
+import 'package:EasyInvoice/Services/purchase_history.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -188,7 +189,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadDashboardData() async {
     final prefs = await SharedPreferences.getInstance();
     final logo = prefs.getString('company_logo');
-    final list = prefs.getStringList("invoice_history") ?? [];
+    final list = await PurchaseHistoryService.getRawHistory();
 
     if (list.isEmpty) {
       if (mounted) {

@@ -3,6 +3,7 @@ import 'package:EasyInvoice/Drawer/Security/security_service.dart';
 import 'package:EasyInvoice/Home/template_preview.dart';
 import 'package:EasyInvoice/Home/invoice_form_page.dart';
 import 'package:EasyInvoice/Provider/theme_provider.dart';
+import 'package:EasyInvoice/Services/purchase_history.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -47,9 +48,9 @@ class _InvoiceHistoryState extends State<InvoiceHistory>
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = (prefs.getStringList("invoice_history") ?? []).reversed
-        .toList();
+    // Use PurchaseHistoryService to get history
+    final rawList = await PurchaseHistoryService.getRawHistory();
+    final list = rawList.reversed.toList();
 
     final p = <Map<String, dynamic>>[];
     for (final i in list) {
@@ -159,33 +160,32 @@ class _InvoiceHistoryState extends State<InvoiceHistory>
 
     if (!confirm) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    List<String> currentList = prefs.getStringList("invoice_history") ?? [];
-    List<String> updatedList = [];
+    // Use PurchaseHistoryService to mark as paid
+    bool success = await PurchaseHistoryService.markAsPaid(
+      invoice['invoiceId'],
+      invoice['savedAt'],
+    );
 
-    for (String itemStr in currentList) {
-      try {
-        Map<String, dynamic> itemMap = jsonDecode(itemStr);
-        if (itemMap['invoiceId'] == invoice['invoiceId'] &&
-            itemMap['savedAt'] == invoice['savedAt']) {
-          itemMap['status'] = 'Paid';
-          updatedList.add(jsonEncode(itemMap));
-        } else {
-          updatedList.add(itemStr);
-        }
-      } catch (_) {
-        updatedList.add(itemStr);
+    if (success) {
+      _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Bill marked as Paid successfully"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Failed to mark bill as paid"),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
-
-    await prefs.setStringList("invoice_history", updatedList);
-    _load();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Bill marked as Paid successfully"),
-        backgroundColor: Colors.green,
-      ),
-    );
   }
 
   void _toggleSelect(String id) {
@@ -224,9 +224,7 @@ class _InvoiceHistoryState extends State<InvoiceHistory>
   }
 
   Future<void> _deleteSelected() async {
-    bool authorized = await SecurityService.requireSmartLock();
-    if (!authorized) return;
-
+    // Smart lock is already handled in PurchaseHistoryService
     if (_selectedIds.isEmpty) return;
     final colors = AppColors(context);
 
@@ -267,19 +265,25 @@ class _InvoiceHistoryState extends State<InvoiceHistory>
 
     if (ok != true) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final originalStorageList = prefs.getStringList("invoice_history") ?? [];
+    // Use PurchaseHistoryService to delete multiple purchases
+    bool success = await PurchaseHistoryService.deletePurchases(
+      _selectedIds.keys.toList(),
+    );
 
-    originalStorageList.removeWhere((rawString) {
-      final p = _parse(rawString);
-      String key = "${p['invoiceId']}_${p['savedAt']}";
-      return _selectedIds.containsKey(key);
-    });
-
-    await prefs.setStringList("invoice_history", originalStorageList);
-    _selectedIds.clear();
-    _selectionMode = false;
-    await _load();
+    if (success) {
+      _selectedIds.clear();
+      _selectionMode = false;
+      await _load();
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Authentication failed or deletion canceled"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   String _shortDate(String iso) {
