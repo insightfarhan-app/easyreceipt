@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:EasyInvoice/Home/compare_report.dart';
 import 'package:EasyInvoice/Home/report_generator.dart';
 import 'package:EasyInvoice/Provider/theme_provider.dart';
+import 'package:EasyInvoice/Services/purchase_history.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -70,10 +71,9 @@ class _InvoiceReportState extends State<InvoiceReport>
 
   Future<void> _loadInvoices() async {
     setState(() => _loading = true);
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList('invoice_history') ?? [];
+    final list = await PurchaseHistoryService.getRawHistory();
 
-    final parsed = <Map<String, dynamic>>[];
+    final parsed = <Map<String, dynamic>>();
 
     for (final s in list) {
       try {

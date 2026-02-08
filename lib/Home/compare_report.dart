@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:EasyInvoice/Services/purchase_history.dart';
 
 class CompareReportPage extends StatefulWidget {
   const CompareReportPage({super.key});
@@ -31,8 +32,7 @@ class _CompareReportPageState extends State<CompareReportPage> {
   }
 
   Future<void> _loadData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList("invoice_history") ?? [];
+    final list = await PurchaseHistoryService.getRawHistory();
     final parsed = <Map<String, dynamic>>[];
 
     for (final s in list) {
